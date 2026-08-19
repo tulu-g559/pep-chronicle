@@ -1,26 +1,18 @@
-"""Command-line interface for PEP Chronicle.
-
-Modes:
-    python cli.py                       interactive prompt
-    python cli.py "proposal text"       single proposal
-"""
-
 from __future__ import annotations
-
-import sys
+import io, sys
 from pathlib import Path
 
-if hasattr(sys.stdout, "reconfigure"):
+if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from src.graph import load_knowledge
 from src.reasoner import reason
 
 BANNER = """
-========================================
-PEP Chronicle
-Historical Python Design Reasoner
-========================================
+-----------------------------------------
+|PEP Chronicle
+|Historical Python Design Reasoner
+|========================================
 """
 
 
@@ -125,6 +117,7 @@ def render(result: dict) -> str:
     return "\n".join(lines)
 
 
+
 def main(argv: list[str]) -> int:
     graph = load_knowledge(Path("knowledge.json"))
     print(BANNER)
@@ -150,7 +143,6 @@ def main(argv: list[str]) -> int:
     for proposal in proposals:
         result = reason(proposal, graph)
         print(render(result))
-
     return 0
 
 
