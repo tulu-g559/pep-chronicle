@@ -1,7 +1,17 @@
 import re
+from datetime import datetime
 from pathlib import Path
 
 from src.schema import Entity, Relationship
+
+
+def _iso_date(value: str) -> str:
+    """Normalize PEP header dates (25-Jun-2006) to ISO format (2006-06-25)."""
+    value = value.strip()
+    try:
+        return datetime.strptime(value, "%d-%b-%Y").date().isoformat()
+    except ValueError:
+        return value
 
 
 def extract_pep_metadata(text: str) -> Entity:
@@ -13,7 +23,7 @@ def extract_pep_metadata(text: str) -> Entity:
     title = find(r"^Title:\s*(.+)")
     status = find(r"^Status:\s*(.+)")
     python_version = find(r"^Python-Version:\s*(.+)")
-    created = find(r"^Created:\s*(.+)")
+    created = _iso_date(find(r"^Created:\s*(.+)"))
 
     authors = _extract_authors(text)
 
@@ -191,6 +201,89 @@ _DESIGN_CHAIN_RULES: list[dict] = [
             },
         },
     },
+    {
+        "question": "q3_or_pattern_separator",
+        "section_keys": ("use some other syntax instead of | for or patterns",),
+        "options": {
+            "opt_q3_pipe": ("alternatives to using",),
+            "opt_q3_or_keyword": ("or keyword",),
+            "opt_q3_comma": ("use a comma",),
+            "opt_q3_stacked_case": ("allow stacked cases",),
+        },
+        "objections": [
+            (
+                "opt_q3_comma",
+                "obj_q3_comma",
+                ("looks too much like a tuple",),
+            ),
+            (
+                "opt_q3_stacked_case",
+                "obj_q3_stacked_case",
+                ("fall-through semantics",),
+            ),
+            (
+                "opt_q3_or_keyword",
+                "obj_q3_or_keyword",
+                ("elixir, erlang",),
+            ),
+        ],
+        "decision": {
+            "id": "d3",
+            "chose": "opt_q3_pipe",
+            "chose_section_keys": ("use some other syntax instead of | for or patterns",),
+            "chose_phrases": ("alternatives to using",),
+            "rejected": {
+                "opt_q3_or_keyword": ("or keyword",),
+                "opt_q3_comma": ("use a comma",),
+                "opt_q3_stacked_case": ("allow stacked cases",),
+            },
+        },
+    },
+    {
+        "question": "q4_keyword_hardness",
+        "section_keys": ("use a hard keyword",),
+        "options": {
+            "opt_q4_hard_keyword": ("make match a hard keyword",),
+            "opt_q4_soft_keyword": ("soft keyword",),
+        },
+        "objections": [
+            (
+                "opt_q4_hard_keyword",
+                "obj_q4_hard_keyword",
+                ("commonly used in existing code",),
+            ),
+        ],
+        "decision": {
+            "id": "d4",
+            "chose": "opt_q4_soft_keyword",
+            "chose_section_keys": ("use a hard keyword",),
+            "chose_phrases": ("we decided not to use hard keyword",),
+            "rejected": {
+                "opt_q4_hard_keyword": ("make match a hard keyword",),
+            },
+        },
+    },
+]
+
+# Decisions whose evidence lives in a different section than the question's
+# main design chain. d2b is the 2020 dispatch decision: it is recorded in
+# PEP 634 but its rationale is documented in PEP 622's rejected-idea section
+# "Use dispatch dict semantics for matches".
+_DECISION_ONLY_RULES: list[dict] = [
+    {
+        "question": "q2_dispatch_semantics",
+        "section_keys": ("use dispatch dict semantics for matches",),
+        "decision": {
+            "id": "d2b",
+            "chose": "opt_q2_if_elif",
+            "chose_phrases": ("pre-computed hash table", "modest performance win"),
+            "rejected": {
+                "opt_q2_dict_dispatch": ("pre-computed hash table",),
+            },
+        },
+        "informed_by": "obj_q2_dict_dispatch",
+        "informed_phrases": ("pre-computed hash table",),
+    },
 ]
 
 
@@ -208,6 +301,44 @@ def extract_relationships(
         if body is None or not _matches(body, phrases):
             continue
         relationships.append(Relationship(pep_id, relation, target))
+
+    return relationships
+
+
+def extract_pep_structure_relationships(
+    text: str, pep_number: int | None = None
+) -> list[Relationship]:
+    """Derive PEP-to-PEP links from headers and section content."""
+    if pep_number is None:
+        pep_number = _pep_number_from_text(text)
+    pep_id = f"pep_{pep_number}"
+    relationships: list[Relationship] = []
+
+    match = re.search(r"^Superseded-By:\s*(\d+)", text, re.MULTILINE)
+    if match:
+        relationships.append(
+            Relationship(pep_id, "SUPERSEDED_BY", f"pep_{int(match.group(1))}")
+        )
+
+    match = re.search(r"^Replaces:\s*(\d+)", text, re.MULTILINE)
+    if match:
+        relationships.append(
+            Relationship(pep_id, "SUPERSEDES", f"pep_{int(match.group(1))}")
+        )
+
+    sections = _parse_sections(text)
+    body = _find_section(sections, "abstract")
+    if body is not None and _matches(body, ("split in three parts",)):
+        source = pep_id
+        match = re.search(r"^Replaces:\s*(\d+)", text, re.MULTILINE)
+        if match:
+            source = f"pep_{int(match.group(1))}"
+        for ref in re.finditer(r":pep:`(\d+)`", body):
+            target = f"pep_{int(ref.group(1))}"
+            if target != source:
+                relationships.append(
+                    Relationship(source, "SPLITS_INTO", target)
+                )
 
     return relationships
 
@@ -252,5 +383,26 @@ def extract_design_relationships(
                 relationships.append(
                     Relationship(decision["id"], "REJECTED", rejected_id)
                 )
+
+    for rule in _DECISION_ONLY_RULES:
+        body = _find_section(sections, *rule["section_keys"])
+        if body is None:
+            continue
+        question = rule["question"]
+        decision = rule["decision"]
+        if _matches(body, decision["chose_phrases"]):
+            relationships.append(Relationship(question, "RESOLVED_BY", decision["id"]))
+            relationships.append(
+                Relationship(decision["id"], "CHOSE", decision["chose"])
+            )
+        for rejected_id, phrases in decision["rejected"].items():
+            if _matches(body, phrases):
+                relationships.append(
+                    Relationship(decision["id"], "REJECTED", rejected_id)
+                )
+        if rule.get("informed_by") and _matches(body, rule["informed_phrases"]):
+            relationships.append(
+                Relationship(decision["id"], "INFORMED_BY", rule["informed_by"])
+            )
 
     return relationships

@@ -145,13 +145,28 @@ The graph also records the historical relationships between PEPs:
 - `SPLITS_INTO` (pep_622 -> pep_634, pep_635, pep_636)
 - `INFORMED_BY` (the 2020 dispatch decision cites the 2006 objection)
 
+## Installation
+
+Requirements:
+
+- Python 3.10 or newer
+- No third-party dependencies: the entire project uses the standard library
+- No environment variables or configuration files
+
+There is nothing to install. Clone the repository and run everything from
+the repository root:
+
+```bash
+python cli.py "I want to introduce a new reserved keyword for pattern matching."
+```
+
 ## Architecture
 
 ```
 data/raw/*.rst
     |
     v
-src/ingest.py        normalize + load raw PEP documents
+src/ingest.py       normalize, extract, merge curated content, validate
     |
     v
 src/extract.py       RST section parsing, evidence-phrase rules, relationships
@@ -172,12 +187,17 @@ cli.py               rendering and CLI entry point
 ### src/ingest.py
 
 Normalizes raw text (strips BOM, NFC unicode normalization, CRLF to LF,
-trailing blank lines) and loads `pep-XXXX.rst` files from a directory. Can
-be run standalone to inspect the loaded documents:
+trailing blank lines), runs the extraction rules over each document, merges
+the curated knowledge definitions, and produces a validated `KnowledgeState`
+with the canonical structure consumed by `graph.py`. It can regenerate
+`knowledge.json` from the raw documents:
 
 ```bash
-python -m src.ingest --input data/raw
+python -m src.ingest --input data/raw --output knowledge.json
 ```
+
+The state is validated before writing: duplicate entity ids and
+relationships that reference unknown entities fail the build.
 
 ### src/extract.py
 
@@ -191,17 +211,27 @@ structure from the raw RST documents:
 - `_PROPOSAL_RULES` cover the proposal level (e.g. an Abstract containing
   "pattern matching statement" emits `PROPOSES -> feature_pattern_matching`).
 - `_DESIGN_CHAIN_RULES` cover full design chains (options, objections,
-  decision, chosen and rejected options) for the wildcard-token and
-  dispatch-semantics questions.
+  decision, chosen and rejected options) for all four design questions:
+  wildcard token, dispatch semantics, OR-pattern separator, and keyword
+  hardness.
+- `_DECISION_ONLY_RULES` cover decisions whose evidence lives in a
+  different section than the main chain (e.g. d2b, the 2020 dispatch
+  decision, documented in PEP 622's "use dispatch dict semantics for
+  matches" section).
+- PEP-structure rules derive `SUPERSEDED_BY` / `SUPERSEDES` from the
+  `Superseded-By:` / `Replaces:` headers and `SPLITS_INTO` from the abstract
+  of the replacement PEP.
 - The PEP number is read from the `PEP:` header line, but the extractor does
   not dispatch on it. It never special-cases "if this is pep_622, emit
-  everything": pep_634, 635, and 636 produce nothing, because no rule's
-  section and phrases match their content.
+  everything": pep_634, 635, and 636 produce only what their content
+  supports.
 
-Extraction is reproducible but scoped. It reproduces the proposal-level
-relationships and the q1/q2 design chains; the rest of `knowledge.json`
-(PEP-to-PEP links, concept relations, the 2020-era decisions) is part of the
-curated gold state.
+Extraction is reproducible but scoped. What the documents cannot state is
+kept as explicit curated definitions in `src/curated.py` (feature and
+concept wording, option labels, objection texts, decision rationales, and
+historical links such as `PRECEDENT_FOR`, which a 2006 document cannot
+reference). The pipeline merges the two layers, so regenerating
+`knowledge.json` never drops the manually designed content.
 
 ### src/schema.py
 
@@ -279,8 +309,12 @@ This is not automated knowledge-graph extraction in the general sense. The
 extractor does not discover arbitrary entities from arbitrary documents.
 Every rule names the section and the evidence phrases it is looking for, so
 it only reproduces structure that was explicitly designed beforehand. The
-curated `knowledge.json` is the runtime source of truth and is never
-modified by the system.
+manually designed content (wording, labels, and historical links that no
+document states) lives in `src/curated.py` as explicit definitions, and the
+full knowledge state is validated before it is written. `knowledge.json` is
+the runtime source of truth and is never modified by the reasoning system.
+The regeneration command and its verification are described in the
+Regeneration section below.
 
 To see what the current rules reproduce from the raw documents:
 
@@ -294,6 +328,46 @@ for doc in load_raw_documents():
         print(r.source, r.relation, r.target)
 "
 ```
+
+## Regeneration
+
+`knowledge.json` is a build artifact of the deterministic pipeline. It can
+be regenerated at any time from the raw PEP documents in `data/raw`:
+
+```bash
+python -m src.ingest --input data/raw --output knowledge.json
+```
+
+Expected output:
+
+```
+Loaded 5 raw PEP documents from data/raw
+  PEP 622: 88429 chars
+  PEP 634: 23167 chars
+  PEP 635: 58226 chars
+  PEP 636: 25324 chars
+  PEP 3103: 24810 chars
+Validated 41 entities, 64 relationships
+Wrote knowledge.json
+```
+
+The pipeline normalizes each RST document, runs the section-aware
+extraction rules, merges the curated definitions from `src/curated.py`,
+validates the result (duplicate entity ids and relationships that reference
+unknown entities fail the build), and writes the canonical structure with
+the four top-level keys (`schema_version`, `domain`, `entities`,
+`relationships`) that `graph.py` expects.
+
+Verify the output shape:
+
+```bash
+python -c "import json; d = json.load(open('knowledge.json', encoding='utf-8')); print(type(d), len(d['entities']), len(d['relationships']))"
+```
+
+Regeneration is idempotent and never drops the manually designed content:
+anything the documents cannot state (wording, option labels, objection
+texts, and historical links such as `PRECEDENT_FOR`) is merged in from
+`src/curated.py` before validation.
 
 ## Reasoning Over a New Input
 
@@ -356,46 +430,53 @@ The `reason()` function returns a structured result with:
 - `precedents`: PEP-to-PEP historical links
 - `recommendations`: human-readable lines assembled from the graph
 
-## Getting Started
+## CLI Usage
 
-Requirements:
+Two ways to run the CLI.
 
-- Python 3.10 or newer
-- No third-party dependencies, everything is the standard library
-- No environment variables or configuration files
-
-Run the interactive CLI:
-
-```bash
-python cli.py
-```
-
-Run a single proposal:
+Single proposal as an argument:
 
 ```bash
 python cli.py "I want to add a switch-style dispatch mechanism using precomputed lookup tables."
 ```
 
-Run the test suite (99 checks across knowledge loading, retrieval,
-irrelevant inputs, mixed proposals, CLI integration, and regression tests
-for direct vs contextual relevance and signal matching):
+Interactive session (type proposals until a blank line):
+
+```bash
+python cli.py
+```
+
+The rendered output covers the proposal, matched signals, relevant and
+contextual design questions, historical options and objections, decisions,
+historical context, precedents, and recommendations. On Windows, stdout is
+reconfigured to UTF-8 so non-ASCII characters render correctly. See
+"Reasoning Over a New Input" for a full example run.
+
+## Testing
 
 ```bash
 python test_system.py
 ```
 
-## Project Layout
+99 checks, all passing: knowledge state loading (41 entities, 64
+relationships), retrieval of known-like inputs, novel inputs, irrelevant
+inputs (no invented connections), mixed proposals, vague input handling,
+knowledge.json integrity, CLI integration, and the direct vs contextual
+relevance and signal-matching regression tests.
+
+## Project Structure
 
 ```
 cli.py               CLI entry point and rendering
-knowledge.json       curated knowledge state (41 entities, 64 relationships)
+knowledge.json       knowledge state (41 entities, 64 relationships)
 test_system.py       integration and regression test suite
 approach.md          design notes and rationale
 data/raw/            source PEP documents as RST
 src/
   schema.py          Entity, Relationship, KnowledgeState, validation
-  ingest.py          raw document loading and normalization
+  ingest.py          regeneration pipeline: extract, merge curated, validate
   extract.py         section-aware extraction rules
+  curated.py         manually designed knowledge definitions
   graph.py           in-memory knowledge graph
   reasoner.py        deterministic reasoning over new inputs
 ```
