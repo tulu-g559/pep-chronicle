@@ -1,54 +1,44 @@
 # PEP Chronicle
 
-PEP Chronicle is a deterministic historical design reasoner for a focused
-slice of Python's PEP history. It models the design history of structural
-pattern matching (and its rejected switch/case predecessor) as an explicit
-knowledge graph, and it reasons over that graph when given a new,
-free-text Python language proposal.
+PEP Chronicle is a **deterministic historical design reasoner** for a focused slice of Python's PEP history. It models the design history of `structural pattern matching` (and its rejected switch/case predecessor) as an explicit knowledge graph, and it reasons over that graph when given a new, free-text Python language proposal.
 
-No LLM, no external API, no embeddings, no vector database, no automated
-entity extraction. The entity schema, extraction rules, and reasoning logic
-are all explicit code in this repository.
+No `LLM`, no `external API`, no `embeddings`, no `vector database`, no `automated
+entity extraction`. 
+The entity schema, extraction rules, and reasoning logic are all explicit code in this repository.
 
 ## What It Does
 
-Python's language design history contains proposals, alternatives,
-objections, and decisions, but those relationships are difficult to navigate
-from individual PEP documents. A proposal like "match/case" is spread across
-several PEPs, and the rejected alternatives are usually the most informative
-part, yet they are the easiest to miss when reading.
+Python's language design history contains proposals, alternatives, objections, and decisions, but those relationships are difficult to navigate from individual PEP documents. A proposal like `match/case` is spread across several PEPs, and the rejected alternatives are usually the most informative part, yet they are the easiest to miss when reading.
 
-This project models a selected slice of that history as explicit entities
-and relationships, then uses the resulting graph to reason about a new
-proposal:
+This project models a selected slice of that history as explicit entities and relationships, then uses the resulting graph to reason about a new proposal:
 
 ```
-NEW INPUT
-"I want to introduce a new reserved keyword for pattern matching."
-    |
-    v
-direct design-question signals
-    |
-    v
-DesignQuestion
-    |
-    v
-DesignOptions
-    |
-    v
-Objections
-    |
-    v
-Decision
-    |
-    v
-PEP context
-    |
-    v
-Historical relationships
-    |
-    v
-Actionable recommendation
+    NEW INPUT
+    "I want to introduce a new reserved keyword for pattern matching."
+        |
+        v
+    direct design-question signals
+        |
+        v
+    DesignQuestion
+        |
+        v
+    DesignOptions
+        |
+        v
+    Objections
+        |
+        v
+    Decision
+        |
+        v
+    PEP context
+        |
+        v
+    Historical relationships
+        |
+        v
+    Actionable recommendation
 ```
 
 The new proposal is matched against the knowledge state. It is never
@@ -341,7 +331,7 @@ HISTORICAL DECISIONS
 
 HISTORICAL CONTEXT
 ------------------
-  pep_622 - Structural Pattern Matching [Superseded, Python 3.10, 2020-06-23]
+  pep_622 — Structural Pattern Matching [Superseded, Python 3.10, 2020-06-23]
 
 PRECEDENTS
 ----------
