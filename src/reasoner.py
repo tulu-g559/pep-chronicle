@@ -1,6 +1,7 @@
 import re
 
 from src.graph import KnowledgeGraph
+from src.schema import Entity
 
 QUESTION_SIGNALS = {
     "q1_wildcard_token": {
@@ -77,7 +78,12 @@ def _normalize(text: str) -> str:
 
 def _signal_matches(text: str, signals: set[str]) -> list[str]:
     normalized = _normalize(text)
-    return sorted(s for s in signals if s in normalized)
+    matched = []
+    for signal in signals:
+        pattern = r"\b" + re.escape(signal) + r"\w*\b"
+        if re.search(pattern, normalized):
+            matched.append(signal)
+    return sorted(matched)
 
 
 def _pep_entities(graph: KnowledgeGraph) -> dict[str, object]:
@@ -165,43 +171,44 @@ def _collect_precedents(pep_ids: set[str], graph: KnowledgeGraph) -> list[dict]:
 
 
 def _build_recommendations(
-    input_text: str,
     evidence: list[dict],
     precedents: list[dict],
+    pep_titles: dict[str, str],
 ) -> list[str]:
     recommendations: list[str] = []
-    input_tokens = set(_INPUT_TOKEN_RE.findall(_normalize(input_text)))
 
     for item in evidence:
         option_labels = {
             option["id"]: option["label"]
             for option in item["historical_options"]
         }
+        option_objections = {
+            option["id"]: [obj["text"] for obj in option["objections"]]
+            for option in item["historical_options"]
+        }
+
         for decision in item["decisions"]:
             chose_id = decision.get("chose", "")
             chose_label = option_labels.get(chose_id, chose_id)
-            recommendations.append(
-                f"Question '{item['question_text']}' was resolved in {decision['recorded_in']}: "
-                f"chose '{chose_label}' (rationale: {decision['rationale']})."
+            recorded = decision.get("recorded_in", "")
+            recorded_label = pep_titles.get(recorded, recorded)
+            decision_type = decision.get("decision_type", "final")
+            kind = "" if decision_type == "final" else f" [{decision_type}]"
+
+            line = (
+                f"Question '{item['question_text']}' (raised in {', '.join(item['raised_in'])}): "
+                f"decision {decision['id']}{kind} recorded in {recorded_label} "
+                f"chose '{chose_label}' — {decision.get('rationale', '')}"
             )
-            for option in item["historical_options"]:
-                if option["id"] in decision.get("rejected", []):
-                    labels = _normalize(option["label"])
-                    overlaps = sorted(
-                        token
-                        for token in input_tokens
-                        if len(token) > 2 and token in labels
-                    )
-                    if overlaps:
-                        objection = (
-                            option["objections"][0]["text"]
-                            if option["objections"]
-                            else ""
-                        )
-                        recommendations.append(
-                            f"Caution: the new proposal mentions '{', '.join(overlaps)}', which "
-                            f"overlaps with '{option['label']}' — rejected because: {objection}"
-                        )
+            if decision.get("note"):
+                line += f" Note: {decision['note']}"
+            recommendations.append(line)
+
+            for rejected_id in decision.get("rejected", []):
+                label = option_labels.get(rejected_id, rejected_id)
+                objections = option_objections.get(rejected_id, [])
+                detail = "; ".join(objections) or "no recorded objection"
+                recommendations.append(f"  rejected '{label}': {detail}")
 
     for precedent in precedents:
         recommendations.append(
@@ -261,21 +268,26 @@ def reason(proposal: str, graph: KnowledgeGraph) -> dict:
 
     precedents = _collect_precedents({p for p in involved_peps if p.startswith("pep_")}, graph)
 
-    context_peps = {
-        p: graph.get_entity(p)
-        for p in sorted(involved_peps)
-        if p.startswith("pep_") and graph.get_entity(p) is not None
-    }
-    # historical_context = [
-    #     {
-    #         "id": pep_id,
-    #         "title": entity.properties.get("title", ""),
-    #         "status": entity.properties.get("status", ""),
-    #         "python_version": entity.properties.get("python_version", ""),
-    #         "created": entity.properties.get("created", ""),
-    #     }
-    #     for pep_id, entity in context_peps.items()
-    # ]
+    context_peps: dict[str, Entity] = {}
+
+    for pep_id in sorted(involved_peps):
+        if not pep_id.startswith("pep_"):
+            continue
+
+        entity = graph.get_entity(pep_id)
+
+        if entity is not None:
+            context_peps[pep_id] = entity
+    historical_context = [
+        {
+            "id": pep_id,
+            "title": entity.properties.get("title", ""),
+            "status": entity.properties.get("status", ""),
+            "python_version": entity.properties.get("python_version", ""),
+            "created": entity.properties.get("created", ""),
+        }
+        for pep_id, entity in context_peps.items()
+    ]
 
     matched_terms = set()
     for matched in question_hits.values():
@@ -295,7 +307,14 @@ def reason(proposal: str, graph: KnowledgeGraph) -> dict:
             "unmatched_terms": unmatched,
         },
         "relevant_questions": evidence,
-        # "historical_context": historical_context,
+        "historical_context": historical_context,
         "precedents": precedents,
-        "recommendations": _build_recommendations(proposal, evidence, precedents),
+        "recommendations": _build_recommendations(
+            evidence,
+            precedents,
+            {
+                item["id"]: f"{item['id']} ('{item['title']}')"
+                for item in historical_context
+            },
+        ),
     }
