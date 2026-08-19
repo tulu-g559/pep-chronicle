@@ -6,7 +6,7 @@ if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from src.graph import load_knowledge
-from src.reasoner import reason
+from src.reasoner import reason, _fix_spacing
 
 BANNER = """
 -----------------------------------------
@@ -47,10 +47,30 @@ def render(result: dict) -> str:
     lines.append("RELEVANT DESIGN QUESTIONS")
     lines.append("-" * len("RELEVANT DESIGN QUESTIONS"))
     for i, item in enumerate(result["relevant_questions"], start=1):
+        kind = (
+            "  (contextual)"
+            if item.get("relevance_type") == "contextual"
+            else ""
+        )
         lines.append(
-            f"{i}. {item['question_text']}  (score {item['relevance_score']})"
+            f"{i}. {item['question_text']}  "
+            f"(score {item['relevance_score']}){kind}"
         )
     lines.append("")
+
+    if result.get("contextual_questions"):
+        header = "CONTEXTUAL DESIGN QUESTIONS (context only)"
+        lines.append(header)
+        lines.append("-" * len(header))
+        for item in result["contextual_questions"]:
+            lines.append(
+                f"  {item['question_text']}  "
+                f"(score {item['relevance_score']})"
+            )
+            lines.append(
+                f"    via: {', '.join(item['matched_signals'])}"
+            )
+        lines.append("")
 
     lines.append("HISTORICAL OPTIONS AND OBJECTIONS")
     lines.append("-" * len("HISTORICAL OPTIONS AND OBJECTIONS"))
@@ -62,7 +82,7 @@ def render(result: dict) -> str:
             lines.append(f"  {marker} {option['label']}")
             for objection in option["objections"]:
                 lines.append(f"      objection ({objection['category']}):")
-                lines.append(f"        {objection['text']}")
+                lines.append(f"        {_fix_spacing(objection['text'])}")
         lines.append("")
 
     lines.append("HISTORICAL DECISIONS")
@@ -83,9 +103,9 @@ def render(result: dict) -> str:
                 f"  {decision['id']}{kind} ({decision.get('recorded_in', '')}): "
                 f"chose '{chose}'; rejected: {', '.join(rejected) or 'none'}"
             )
-            lines.append(f"    rationale: {decision.get('rationale', '')}")
+            lines.append(f"    rationale: {_fix_spacing(decision.get('rationale', ''))}")
             if decision.get("note"):
-                lines.append(f"    note: {decision['note']}")
+                lines.append(f"    note: {_fix_spacing(decision['note'])}")
         lines.append("")
 
     lines.append("HISTORICAL CONTEXT")

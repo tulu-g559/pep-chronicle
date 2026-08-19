@@ -210,6 +210,163 @@ r_empty = subprocess.run(
 )
 check("cli: empty interactive input exits cleanly", r_empty.returncode == 0, r_empty.stderr[-500:])
 
+
+section("8. Deterministic relevance — direct vs contextual")
+from src.reasoner import _fix_spacing
+
+# TEST 1: feature expansion must not promote q1/q3 to primary relevance.
+r = reason(
+    "I want to introduce a new reserved keyword for pattern matching.", g
+)
+check(
+    "regression: reserved keyword primary is q4",
+    qids(r) == ["q4_keyword_hardness"],
+    str(qids(r)),
+)
+check(
+    "regression: q1/q3 not primary",
+    not {"q1_wildcard_token", "q3_or_pattern_separator"} & set(qids(r)),
+)
+check(
+    "regression: q4 marked direct",
+    all(q["relevance_type"] == "direct" for q in r["relevant_questions"]),
+)
+check(
+    "regression: trace shows reserved keyword then keyword",
+    r["relevant_questions"][0]["matched_signals"]
+    == ["[question] reserved keyword", "[question] keyword"],
+    str(r["relevant_questions"][0]["matched_signals"]),
+)
+check(
+    "regression: pep_622 still historical context",
+    "pep_622" in [p["id"] for p in r["historical_context"]],
+)
+
+# TEST 2: wildcard/placeholder syntax -> q1.
+r = reason(
+    "I want to introduce a new wildcard placeholder syntax for pattern matching.", g
+)
+check(
+    "regression: wildcard placeholder primary is q1",
+    qids(r) == ["q1_wildcard_token"],
+    str(qids(r)),
+)
+
+# TEST 3: alternative patterns in nested matches -> q3.
+r = reason(
+    "I want to introduce a new syntax for alternative patterns inside nested match patterns.", g
+)
+check(
+    "regression: alternative patterns primary is q3",
+    qids(r) == ["q3_or_pattern_separator"],
+    str(qids(r)),
+)
+
+# TEST 4: switch-style dispatch with precomputed lookup tables -> q2.
+r = reason(
+    "I want to add a switch-style dispatch mechanism using precomputed lookup tables.", g
+)
+check(
+    "regression: dispatch primary is q2",
+    qids(r) == ["q2_dispatch_semantics"],
+    str(qids(r)),
+)
+
+# TEST 5: mixed construct — q2, q3, q4 primary; q1 NOT inferred from the
+# feature match alone.
+r = reason(
+    "I want to add a new pattern matching construct with alternative patterns, "
+    "a new keyword, and optimized dispatch.",
+    g,
+)
+got = qids(r)
+check(
+    "regression: mixed construct finds q2/q3/q4",
+    {"q2_dispatch_semantics", "q3_or_pattern_separator", "q4_keyword_hardness"}
+    <= set(got),
+    str(got),
+)
+check(
+    "regression: mixed construct does not invent q1",
+    "q1_wildcard_token" not in got,
+    str(got),
+)
+
+# TEST 6: irrelevant input — no invented connections.
+r = reason("I want to improve Python's garbage collector to reduce memory usage.", g)
+check(
+    "regression: GC input has no relevant questions",
+    len(r["relevant_questions"]) == 0,
+    str(qids(r)),
+)
+check(
+    "regression: GC input has no precedents",
+    len(r["precedents"]) == 0,
+)
+check(
+    "regression: GC input has no historical context",
+    len(r["historical_context"]) == 0,
+)
+
+# TEST 7: old substring bug — "for pattern matching" must not match
+# q3_or_pattern_separator via the "or pattern" signal.
+r = reason("for pattern matching", g)
+all_traces = [
+    sig
+    for q in r["relevant_questions"] + r["contextual_questions"]
+    for sig in q["matched_signals"]
+]
+check(
+    "regression: 'or pattern' never in matched signals",
+    not any("or pattern" in sig for sig in all_traces),
+    str(all_traces),
+)
+check(
+    "regression: q3 not directly matched",
+    "q3_or_pattern_separator" not in r["signal_match"]["questions"],
+    str(r["signal_match"]["questions"]),
+)
+
+section("9. Broad input fallback and formatting")
+r = reason("I want to change Python's pattern matching behavior.", g)
+check(
+    "fallback: broad input surfaces contextual questions",
+    len(r["relevant_questions"]) >= 1,
+    str(qids(r)),
+)
+check(
+    "fallback: questions clearly marked contextual",
+    all(q["relevance_type"] == "contextual" for q in r["relevant_questions"]),
+    str([q["relevance_type"] for q in r["relevant_questions"]]),
+)
+check(
+    "fallback: no direct questions",
+    r["direct_questions"] == [],
+    str(r["direct_questions"]),
+)
+check(
+    "fallback: pep_622 in historical context",
+    "pep_622" in [p["id"] for p in r["historical_context"]],
+)
+
+fixed = _fix_spacing(
+    "Soft(contextual) keyword doesn'trequire; "
+    "the 'colon increases indent'convention C#,Elixir"
+)
+check(
+    "formatting: spacing artifacts repaired",
+    fixed
+    == "Soft (contextual) keyword doesn't require; "
+    "the 'colon increases indent' convention C#, Elixir",
+    fixed,
+)
+fixed_ticks = _fix_spacing("use `_`;e.g. Point(0|1, 0|1)")
+check(
+    "formatting: code spans untouched, real calls unspaced",
+    fixed_ticks == "use `_`; e.g. Point(0|1, 0|1)",
+    fixed_ticks,
+)
+
 print(f"\n{'='*50}")
 print(f"TOTAL: {PASSED + FAILED} checks, {FAILED} failed")
 if FAILURES:
