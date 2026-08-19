@@ -92,9 +92,10 @@
      "rationale": "Underscore already used as a throwaway target elsewhere in Python (e.g. unpacking); used as the wildcard in nearly every other language with pattern matching (C#, Elixir, Erlang, F#, Haskell, OCaml, Ruby, Rust, Scala, Swift)."},
 
     {"id": "d2", "type": "Decision", "question": "q2_dispatch_semantics", "recorded_in": "pep_3103",
+     "decision_type": "design_preference",
      "chose": "opt_q2_dict_dispatch", "rejected": ["opt_q2_if_elif"],
      "rationale": "Guido's stated preference in PEP 3103 leaned toward School II (dict dispatch) for performance, despite its named-constant/hash-side-effect problems.",
-     "note": "This preference did not save the proposal — see outcome field on pep_3103 (rejected overall for lack of community support)."},
+     "note": "This was a design preference discussed in PEP 3103, not an implemented decision. The overall proposal was later rejected."},
 
     {"id": "d2b", "type": "Decision", "question": "q2_dispatch_semantics", "recorded_in": "pep_634",
      "chose": "opt_q2_if_elif", "rejected": ["opt_q2_dict_dispatch"],
@@ -103,7 +104,7 @@
 
     {"id": "d3", "type": "Decision", "question": "q3_or_pattern_separator", "recorded_in": "pep_622",
      "chose": "opt_q3_pipe", "rejected": ["opt_q3_or_keyword", "opt_q3_comma", "opt_q3_stacked_case"],
-     "rationale": "Consistent with other pattern-matching languages, consistent with Python's own existing uses of | (set union, dict merge, PEP 604 unions), and reads better than or in nested nested nested patterns."},
+     "rationale": "Consistent with other pattern-matching languages, consistent with Python's own existing uses of | (set union, dict merge, PEP 604 unions), and reads better than `or` in deeply nested patterns."},
 
     {"id": "d4", "type": "Decision", "question": "q4_keyword_hardness", "recorded_in": "pep_622",
      "chose": "opt_q4_soft_keyword", "rejected": ["opt_q4_hard_keyword"],
@@ -133,13 +134,7 @@
 
     {"source": "pep_636", "relation": "DEMONSTRATES", "target": "concept_pattern_matching_usage"},
 
-    {"source": "pep_635", "relation": "ADDRESSES", "target": "obj_q1_ellipsis"},
-    {"source": "pep_635", "relation": "ADDRESSES", "target": "obj_q1_question_mark"},
-    {"source": "pep_635", "relation": "ADDRESSES", "target": "obj_q2_dict_dispatch"},
-    {"source": "pep_635", "relation": "ADDRESSES", "target": "obj_q3_comma"},
-    {"source": "pep_635", "relation": "ADDRESSES", "target": "obj_q3_stacked_case"},
-    {"source": "pep_635", "relation": "ADDRESSES", "target": "obj_q3_or_keyword"},
-    {"source": "pep_635", "relation": "ADDRESSES", "target": "obj_q4_hard_keyword"},
+    
 
     {"source": "pep_622", "relation": "RAISES_QUESTION", "target": "q1_wildcard_token"},
     {"source": "pep_3103", "relation": "RAISES_QUESTION", "target": "q2_dispatch_semantics"},
