@@ -144,8 +144,8 @@ def main(argv: list[str]) -> int:
             proposals.append(proposal.strip())
 
     if not proposals:
-        print("No proposal provided.")
-        return 1
+        print("No proposal provided. Goodbye.")
+        return 0
 
     for proposal in proposals:
         result = reason(proposal, graph)
