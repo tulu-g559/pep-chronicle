@@ -47,7 +47,7 @@ check(
 )
 
 
-section("1. Known-like inputs — retrieve relevant historical knowledge")
+section("1. Known-like inputs - retrieve relevant historical knowledge")
 known = [
     (
         "wildcard placeholder",
@@ -93,7 +93,7 @@ for name, proposal, expected, chose in known:
 
 
 
-section("2. Novel inputs — reason from existing relationships")
+section("2. Novel inputs - reason from existing relationships")
 novel =[
     (
         "fall-through case clauses",
@@ -128,7 +128,7 @@ for name, proposal, expected in novel:
 
 
 
-section("3. Irrelevant inputs — no invented connections")
+section("3. Irrelevant inputs - no invented connections")
 irrelevant = [
     "I want to add a new standard library for parsing CSV files.",
     "The weather in San Francisco is nice today.",
@@ -146,7 +146,7 @@ for proposal in irrelevant:
     check("irrelevant: no recommendations", len(result["recommendations"]) == 0)
     check("irrelevant: input echoed untouched", result["input"] == proposal)
 
-section("4. Mixed proposals — multiple design questions")
+section("4. Mixed proposals - multiple design questions")
 mixed = [
     (
         "switch + keyword + alternatives + dispatch",
@@ -165,7 +165,7 @@ for name, proposal, expected in mixed:
     check(f"mixed: {name} finds all questions", all(e in got for e in expected), str(got))
     check(f"mixed: {name} ranks at least one expected first", top(result) in expected, str(got))
 
-section("5. Empty / very vague input — fail gracefully")
+section("5. Empty / very vague input - fail gracefully")
 vague = ["", "   ", "python", "add a feature", "?", "yes"]
 for proposal in vague:
     result = reason(proposal, g)
@@ -211,7 +211,7 @@ r_empty = subprocess.run(
 check("cli: empty interactive input exits cleanly", r_empty.returncode == 0, r_empty.stderr[-500:])
 
 
-section("8. Deterministic relevance — direct vs contextual")
+section("8. Deterministic relevance - direct vs contextual")
 from src.reasoner import _fix_spacing
 
 # TEST 1: feature expansion must not promote q1/q3 to primary relevance.
@@ -272,7 +272,7 @@ check(
     str(qids(r)),
 )
 
-# TEST 5: mixed construct — q2, q3, q4 primary; q1 NOT inferred from the
+# TEST 5: mixed construct - q2, q3, q4 primary; q1 NOT inferred from the
 # feature match alone.
 r = reason(
     "I want to add a new pattern matching construct with alternative patterns, "
@@ -292,7 +292,7 @@ check(
     str(got),
 )
 
-# TEST 6: irrelevant input — no invented connections.
+# TEST 6: irrelevant input - no invented connections.
 r = reason("I want to improve Python's garbage collector to reduce memory usage.", g)
 check(
     "regression: GC input has no relevant questions",
@@ -308,7 +308,7 @@ check(
     len(r["historical_context"]) == 0,
 )
 
-# TEST 7: old substring bug — "for pattern matching" must not match
+# TEST 7: old substring bug - "for pattern matching" must not match
 # q3_or_pattern_separator via the "or pattern" signal.
 r = reason("for pattern matching", g)
 all_traces = [

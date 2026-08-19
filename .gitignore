@@ -1,2 +1,6 @@
 __pycache__/
 *.py[cod]
+
+src/__pycache__/extract.cpython-312.py
+src/__pycache__/ingest.cpython-312.pyc
+src/__pycache__/reasoner.cpython-312.pyc

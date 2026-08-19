@@ -259,7 +259,7 @@ def _build_recommendations(
             line = (
                 f"Question '{item['question_text']}' (raised in {', '.join(item['raised_in'])}): "
                 f"decision {decision['id']}{kind} recorded in {recorded_label} "
-                f"chose '{chose_label}' — {decision.get('rationale', '')}"
+                f"chose '{chose_label}' - {decision.get('rationale', '')}"
             )
             if decision.get("note"):
                 line += f" Note: {decision['note']}"

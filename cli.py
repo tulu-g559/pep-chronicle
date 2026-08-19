@@ -112,7 +112,7 @@ def render(result: dict) -> str:
     lines.append("-" * len("HISTORICAL CONTEXT"))
     for pep in result["historical_context"]:
         lines.append(
-            f"  {pep['id']} — {pep['title']} "
+            f"  {pep['id']} - {pep['title']} "
             f"[{pep['status']}, Python {pep['python_version']}, {pep['created']}]"
         )
     lines.append("")
