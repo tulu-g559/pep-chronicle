@@ -10,8 +10,12 @@ The entity schema, extraction rules, and reasoning logic are all explicit code i
 
 Python's language design history contains proposals, alternatives, objections, and decisions, but those relationships are difficult to navigate from individual PEP documents. A proposal like `match/case` is spread across several PEPs, and the rejected alternatives are usually the most informative part, yet they are the easiest to miss when reading.
 
-This project models a selected slice of that history as explicit entities and relationships, then uses the resulting graph to reason about a new proposal:
+[ODG <- here](https://excalidraw.com/#json=JNP7UxaOGyjqjvEvKhrzz,RRQuOutSX_zzbJePhrD8LA)
 
+<img width="1524" height="881" alt="image" src="https://github.com/user-attachments/assets/7036b706-5ce6-4c05-8144-7c3318b300c8" />
+
+
+This project models a selected slice of that history as explicit entities and relationships, then uses the resulting graph to reason about a new proposal:
 ```
     NEW INPUT
     "I want to introduce a new reserved keyword for pattern matching."
